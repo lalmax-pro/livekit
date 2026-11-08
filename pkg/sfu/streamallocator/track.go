@@ -15,6 +15,8 @@
 package streamallocator
 
 import (
+	"sync/atomic"
+
 	"github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/logger"
 
@@ -37,7 +39,7 @@ type Track struct {
 
 	isDirty bool
 
-	streamState StreamState
+	streamState atomic.Int32
 }
 
 func NewTrack(
@@ -53,8 +55,8 @@ func NewTrack(
 		isMultiLayered: isMultiLayered,
 		publisherID:    publisherID,
 		logger:         logger,
-		streamState:    StreamStateInactive,
 	}
+	t.streamState.Store(int32(StreamStateInactive))
 	t.SetPriority(0)
 	t.SetMaxLayer(downTrack.MaxLayer())
 
@@ -71,16 +73,11 @@ func (t *Track) SetDirty(isDirty bool) bool {
 }
 
 func (t *Track) SetStreamState(streamState StreamState) bool {
-	if t.streamState == streamState {
-		return false
-	}
-
-	t.streamState = streamState
-	return true
+	return StreamState(t.streamState.Swap(int32(streamState))) != streamState
 }
 
 func (t *Track) IsSubscribeMutable() bool {
-	return t.streamState != StreamStatePaused
+	return StreamState(t.streamState.Load()) != StreamStatePaused
 }
 
 func (t *Track) SetPriority(priority uint8) bool {
