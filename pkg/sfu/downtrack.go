@@ -289,11 +289,11 @@ type DownTrack struct {
 	upstreamPrimaryPT uint8
 	primaryPT         uint8
 
-	absSendTimeExtID          int
-	transportWideExtID        int
-	dependencyDescriptorExtID int
-	playoutDelayExtID         int
-	absCaptureTimeExtID       int
+	absSendTimeExtID          atomic.Int32
+	transportWideExtID        atomic.Int32
+	dependencyDescriptorExtID atomic.Int32
+	playoutDelayExtID         atomic.Int32
+	absCaptureTimeExtID       atomic.Int32
 	transceiver               atomic.Pointer[webrtc.RTPTransceiver]
 	writeStream               webrtc.TrackLocalWriter
 	rtcpReader                *buffer.RTCPReader
@@ -846,59 +846,59 @@ func (d *DownTrack) setRTPHeaderExtensions() {
 		case sdp.ABSSendTimeURI:
 			if sal != nil {
 				if isBWEEnabled && bweType == bwe.BWETypeRemote {
-					if d.absSendTimeExtID != 0 && d.absSendTimeExtID != ext.ID {
-						d.params.Logger.Infow("absSendTimeExtID mismatch", "current", d.absSendTimeExtID, "negotiated", ext.ID)
+					if int(d.absSendTimeExtID.Load()) != 0 && int(d.absSendTimeExtID.Load()) != ext.ID {
+						d.params.Logger.Infow("absSendTimeExtID mismatch", "current", int(d.absSendTimeExtID.Load()), "negotiated", ext.ID)
 					}
-					d.absSendTimeExtID = ext.ID
+					d.absSendTimeExtID.Store(int32(ext.ID))
 				} else {
-					if d.absSendTimeExtID != 0 {
+					if int(d.absSendTimeExtID.Load()) != 0 {
 						d.params.Logger.Infow("absSendTimeExtID disabled unexpectedly", "negotiated", ext.ID)
 					}
-					d.absSendTimeExtID = 0
+					d.absSendTimeExtID.Store(int32(0))
 				}
 			}
 
 		case dd.ExtensionURI:
-			if d.dependencyDescriptorExtID != 0 && d.dependencyDescriptorExtID != ext.ID {
-				d.params.Logger.Infow("dependencyDescriptorExtID mismatch", "current", d.dependencyDescriptorExtID, "negotiated", ext.ID)
+			if int(d.dependencyDescriptorExtID.Load()) != 0 && int(d.dependencyDescriptorExtID.Load()) != ext.ID {
+				d.params.Logger.Infow("dependencyDescriptorExtID mismatch", "current", int(d.dependencyDescriptorExtID.Load()), "negotiated", ext.ID)
 			}
-			d.dependencyDescriptorExtID = ext.ID
+			d.dependencyDescriptorExtID.Store(int32(ext.ID))
 
 		case pd.PlayoutDelayURI:
-			if d.playoutDelayExtID != 0 && d.playoutDelayExtID != ext.ID {
-				d.params.Logger.Infow("playoutDelayExtID mismatch", "current", d.playoutDelayExtID, "negotiated", ext.ID)
+			if int(d.playoutDelayExtID.Load()) != 0 && int(d.playoutDelayExtID.Load()) != ext.ID {
+				d.params.Logger.Infow("playoutDelayExtID mismatch", "current", int(d.playoutDelayExtID.Load()), "negotiated", ext.ID)
 			}
-			d.playoutDelayExtID = ext.ID
+			d.playoutDelayExtID.Store(int32(ext.ID))
 
 		case sdp.TransportCCURI:
 			if sal != nil {
 				if isBWEEnabled && bweType == bwe.BWETypeSendSide {
-					if d.transportWideExtID != 0 && d.transportWideExtID != ext.ID {
-						d.params.Logger.Infow("transportWideExtID mismatch", "current", d.transportWideExtID, "negotiated", ext.ID)
+					if int(d.transportWideExtID.Load()) != 0 && int(d.transportWideExtID.Load()) != ext.ID {
+						d.params.Logger.Infow("transportWideExtID mismatch", "current", int(d.transportWideExtID.Load()), "negotiated", ext.ID)
 					}
-					d.transportWideExtID = ext.ID
+					d.transportWideExtID.Store(int32(ext.ID))
 				} else {
-					if d.transportWideExtID != 0 {
+					if int(d.transportWideExtID.Load()) != 0 {
 						d.params.Logger.Infow("transportWideExtID disabled unexpectedly", "negotiated", ext.ID)
 					}
-					d.transportWideExtID = 0
+					d.transportWideExtID.Store(int32(0))
 				}
 			}
 
 		case act.AbsCaptureTimeURI:
-			if d.absCaptureTimeExtID != 0 && d.absCaptureTimeExtID != ext.ID {
-				d.params.Logger.Infow("absCaptureTimeExtID mismatch", "current", d.absCaptureTimeExtID, "negotiated", ext.ID)
+			if int(d.absCaptureTimeExtID.Load()) != 0 && int(d.absCaptureTimeExtID.Load()) != ext.ID {
+				d.params.Logger.Infow("absCaptureTimeExtID mismatch", "current", int(d.absCaptureTimeExtID.Load()), "negotiated", ext.ID)
 			}
-			d.absCaptureTimeExtID = ext.ID
+			d.absCaptureTimeExtID.Store(int32(ext.ID))
 		}
 	}
 	d.params.Logger.Debugw(
 		"negotiated extension ids",
-		"absSendTimeExtID", d.absSendTimeExtID,
-		"dependencyDescriptorExtID", d.dependencyDescriptorExtID,
-		"playoutDelayExtID", d.playoutDelayExtID,
-		"transportWideExtID", d.transportWideExtID,
-		"absCaptureTimeExtID", d.absCaptureTimeExtID,
+		"absSendTimeExtID", int(d.absSendTimeExtID.Load()),
+		"dependencyDescriptorExtID", int(d.dependencyDescriptorExtID.Load()),
+		"playoutDelayExtID", int(d.playoutDelayExtID.Load()),
+		"transportWideExtID", int(d.transportWideExtID.Load()),
+		"absCaptureTimeExtID", int(d.absCaptureTimeExtID.Load()),
 	)
 	d.bindLock.Unlock()
 }
@@ -1101,8 +1101,8 @@ func (d *DownTrack) WriteRTP(extPkt *buffer.ExtPacket, layer int32) int32 {
 		HeaderPool:         RTPHeaderFactory,
 		Payload:            payload,
 		ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
-		AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-		TransportWideExtID: uint8(d.transportWideExtID),
+		AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+		TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 		WriteStream:        d.writeStream,
 		Pool:               PacketFactory,
 		PoolEntity:         poolEntity,
@@ -1115,12 +1115,12 @@ func (d *DownTrack) WriteRTP(extPkt *buffer.ExtPacket, layer int32) int32 {
 	if inline := tp.ddInline(); ddBytes == nil && len(inline) != 0 {
 		ddBytes, ddExt = inline, pacerPacket.HoldExtension(inline)
 	}
-	if d.dependencyDescriptorExtID != 0 && len(ddExt) != 0 {
-		hdr.SetExtension(uint8(d.dependencyDescriptorExtID), ddExt)
+	if int(d.dependencyDescriptorExtID.Load()) != 0 && len(ddExt) != 0 {
+		hdr.SetExtension(uint8(int(d.dependencyDescriptorExtID.Load())), ddExt)
 	}
-	if d.playoutDelayExtID != 0 && d.playoutDelay != nil {
+	if int(d.playoutDelayExtID.Load()) != 0 && d.playoutDelay != nil {
 		if val := d.playoutDelay.GetDelayExtension(hdr.SequenceNumber); val != nil {
-			hdr.SetExtension(uint8(d.playoutDelayExtID), val)
+			hdr.SetExtension(uint8(int(d.playoutDelayExtID.Load())), val)
 
 			// NOTE: play out delay extension is not cached in sequencer,
 			// i. e. they will not be added to retransmitted packet.
@@ -1132,7 +1132,7 @@ func (d *DownTrack) WriteRTP(extPkt *buffer.ExtPacket, layer int32) int32 {
 		}
 	}
 	var actBytes []byte
-	if extPkt.AbsCaptureTimeExt != nil && d.absCaptureTimeExtID != 0 {
+	if extPkt.AbsCaptureTimeExt != nil && int(d.absCaptureTimeExtID.Load()) != 0 {
 		var actBuf [act.MaxSize]byte
 		n := 0
 		if !d.params.DisableSenderReportPassThrough {
@@ -1159,7 +1159,7 @@ func (d *DownTrack) WriteRTP(extPkt *buffer.ExtPacket, layer int32) int32 {
 		if n != 0 {
 			actBytes = actBuf[:n]
 			if actExt := pacerPacket.HoldExtension(actBytes); actExt != nil {
-				hdr.SetExtension(uint8(d.absCaptureTimeExtID), actExt)
+				hdr.SetExtension(uint8(int(d.absCaptureTimeExtID.Load())), actExt)
 			}
 		}
 	}
@@ -1284,8 +1284,8 @@ func (d *DownTrack) writeDroppedSlotPadding(extSequenceNumber uint64, extTimesta
 		HeaderPool:         RTPHeaderFactory,
 		HeaderSize:         hdrSize,
 		ProbeClusterId:     ccutils.ProbeClusterIdInvalid, // not probe traffic
-		AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-		TransportWideExtID: uint8(d.transportWideExtID),
+		AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+		TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 		WriteStream:        d.writeStream,
 	}
 	d.pacer.Enqueue(pacerPacket)
@@ -1390,8 +1390,8 @@ func (d *DownTrack) WritePaddingRTP(bytesToSend int, paddingOnMute bool, forceMa
 			HeaderSize:         hdrSize,
 			ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
 			IsProbe:            true,
-			AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-			TransportWideExtID: uint8(d.transportWideExtID),
+			AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+			TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 			WriteStream:        d.writeStream,
 		}
 		d.pacer.Enqueue(pacerPacket)
@@ -1975,8 +1975,8 @@ func (d *DownTrack) writeBlankFrameRTP(duration float32, generation uint32) chan
 					HeaderSize:         headerSize,
 					Payload:            payload,
 					ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
-					AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-					TransportWideExtID: uint8(d.transportWideExtID),
+					AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+					TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 					WriteStream:        d.writeStream,
 				}
 				d.pacer.Enqueue(pacerPacket)
@@ -2308,7 +2308,7 @@ func (d *DownTrack) retransmitPacket(epm *extPacketMeta, sourcePkt []byte, isPro
 		hdr.SSRC = d.ssrcRTX
 	}
 
-	if d.dependencyDescriptorExtID != 0 {
+	if int(d.dependencyDescriptorExtID.Load()) != 0 {
 		var ddBytes []byte
 		if len(epm.ddBytesSlice) != 0 {
 			ddBytes = epm.ddBytesSlice
@@ -2316,11 +2316,11 @@ func (d *DownTrack) retransmitPacket(epm *extPacketMeta, sourcePkt []byte, isPro
 			ddBytes = epm.ddBytes[:epm.ddBytesSize]
 		}
 		if len(ddBytes) != 0 {
-			hdr.SetExtension(uint8(d.dependencyDescriptorExtID), ddBytes)
+			hdr.SetExtension(uint8(int(d.dependencyDescriptorExtID.Load())), ddBytes)
 		}
 	}
-	if d.absCaptureTimeExtID != 0 && epm.actBytesSize != 0 {
-		hdr.SetExtension(uint8(d.absCaptureTimeExtID), epm.actBytes[:epm.actBytesSize])
+	if int(d.absCaptureTimeExtID.Load()) != 0 && epm.actBytesSize != 0 {
+		hdr.SetExtension(uint8(int(d.absCaptureTimeExtID.Load())), epm.actBytes[:epm.actBytesSize])
 	}
 	d.addDummyExtensions(hdr)
 
@@ -2404,8 +2404,8 @@ func (d *DownTrack) retransmitPacket(epm *extPacketMeta, sourcePkt []byte, isPro
 		ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
 		IsProbe:            isProbe,
 		IsRTX:              !isProbe,
-		AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-		TransportWideExtID: uint8(d.transportWideExtID),
+		AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+		TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 		WriteStream:        d.writeStream,
 		Pool:               PacketFactory,
 		PoolEntity:         poolEntity,
@@ -2541,7 +2541,7 @@ func (d *DownTrack) WriteProbePackets(bytesToSend int, usePadding bool) int {
 
 	if !d.writable.Load() ||
 		!d.rtpStats.IsActive() ||
-		(d.absSendTimeExtID == 0 && d.transportWideExtID == 0) ||
+		(int(d.absSendTimeExtID.Load()) == 0 && int(d.transportWideExtID.Load()) == 0) ||
 		d.rtpStats.LastReceiverReportTime() == 0 ||
 		d.sequencer == nil {
 		return 0
@@ -2588,8 +2588,8 @@ func (d *DownTrack) WriteProbePackets(bytesToSend int, usePadding bool) int {
 				HeaderSize:         hdrSize,
 				ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
 				IsProbe:            true,
-				AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-				TransportWideExtID: uint8(d.transportWideExtID),
+				AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+				TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 				WriteStream:        d.writeStream,
 			}
 			d.pacer.Enqueue(pacerPacket)
@@ -2638,11 +2638,11 @@ func (d *DownTrack) WriteProbePackets(bytesToSend int, usePadding bool) int {
 
 func (d *DownTrack) addDummyExtensions(hdr *rtp.Header) {
 	// add dummy extensions (actual ones will be filed by pacer) to get header size
-	if d.absSendTimeExtID != 0 {
-		hdr.SetExtension(uint8(d.absSendTimeExtID), dummyAbsSendTimeExt)
+	if int(d.absSendTimeExtID.Load()) != 0 {
+		hdr.SetExtension(uint8(int(d.absSendTimeExtID.Load())), dummyAbsSendTimeExt)
 	}
-	if d.transportWideExtID != 0 {
-		hdr.SetExtension(uint8(d.transportWideExtID), dummyTransportCCExt)
+	if int(d.transportWideExtID.Load()) != 0 {
+		hdr.SetExtension(uint8(int(d.transportWideExtID.Load())), dummyTransportCCExt)
 	}
 }
 
@@ -2851,8 +2851,8 @@ func (d *DownTrack) sendSilentFrameOnMuteForAudio() {
 				HeaderSize:         headerSize,
 				Payload:            payload,
 				ProbeClusterId:     ccutils.ProbeClusterId(d.probeClusterId.Load()),
-				AbsSendTimeExtID:   uint8(d.absSendTimeExtID),
-				TransportWideExtID: uint8(d.transportWideExtID),
+				AbsSendTimeExtID:   uint8(int(d.absSendTimeExtID.Load())),
+				TransportWideExtID: uint8(int(d.transportWideExtID.Load())),
 				WriteStream:        d.writeStream,
 			}
 			d.pacer.Enqueue(pacerPacket)

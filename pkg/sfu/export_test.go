@@ -43,14 +43,14 @@ func (d *DownTrack) LastReceiverReportTimeForTest() int64 {
 }
 
 func (d *DownTrack) ExtIDsForTest() (absSendTime int, transportWide int) {
-	return d.absSendTimeExtID, d.transportWideExtID
+	return int(d.absSendTimeExtID.Load()), int(d.transportWideExtID.Load())
 }
 
 func (d *DownTrack) HandleRTCPForTest(pkt []byte) { d.handleRTCP(pkt) }
 
 func (d *DownTrack) SetRTPHeaderExtensionsForTest() { d.setRTPHeaderExtensions() }
 
-func (d *DownTrack) SetAbsCaptureTimeExtIDForTest(id int) { d.absCaptureTimeExtID = id }
+func (d *DownTrack) SetAbsCaptureTimeExtIDForTest(id int) { d.absCaptureTimeExtID.Store(int32(id)) }
 
 // ForceForwardLayerForTest forces the forwarder onto a valid current/target layer so a
 // (non-simulcast) video packet will be forwarded without driving full allocation.
