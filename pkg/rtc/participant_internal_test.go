@@ -174,6 +174,12 @@ func TestTrackPublishing(t *testing.T) {
 		require.Equal(t, livekit.TrackType_VIDEO, published.Track.Type)
 		require.Equal(t, uint32(1024), published.Track.Width)
 		require.Equal(t, uint32(768), published.Track.Height)
+		// A pending publication can change during SDP negotiation after the
+		// response has been queued for asynchronous signaling.
+		p.pendingTracksLock.Lock()
+		p.pendingTracks["cid"].trackInfos[0].Name = "updated"
+		p.pendingTracksLock.Unlock()
+		require.Equal(t, "webcam", published.Track.Name)
 	})
 
 	t.Run("should not allow adding of duplicate tracks", func(t *testing.T) {

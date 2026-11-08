@@ -3368,9 +3368,10 @@ func (p *ParticipantImpl) addPendingTrack(req *livekit.AddTrackRequest) *livekit
 			p.supervisor.AddPublication(livekit.TrackID(ti.Sid))
 			p.supervisor.SetPublicationMute(livekit.TrackID(ti.Sid), ti.Muted)
 		}
+		snapshot := proto.CloneOf(ti)
 		p.pendingTracksLock.Unlock()
 
-		p.GetTelemetryListener().OnTrackPublishRequested(p.ID(), p.Identity(), proto.CloneOf(ti), true)
+		p.GetTelemetryListener().OnTrackPublishRequested(p.ID(), p.Identity(), snapshot, true)
 		return nil
 	}
 
@@ -3393,10 +3394,11 @@ func (p *ParticipantImpl) addPendingTrack(req *livekit.AddTrackRequest) *livekit
 		p.supervisor.AddPublication(livekit.TrackID(ti.Sid))
 		p.supervisor.SetPublicationMute(livekit.TrackID(ti.Sid), ti.Muted)
 	}
+	snapshot := proto.CloneOf(ti)
 	p.pendingTracksLock.Unlock()
 
-	p.GetTelemetryListener().OnTrackPublishRequested(p.ID(), p.Identity(), proto.CloneOf(ti), true)
-	return ti
+	p.GetTelemetryListener().OnTrackPublishRequested(p.ID(), p.Identity(), proto.CloneOf(snapshot), true)
+	return snapshot
 }
 
 func (p *ParticipantImpl) GetPendingTrack(trackID livekit.TrackID) *livekit.TrackInfo {
@@ -3812,7 +3814,7 @@ func (p *ParticipantImpl) addMediaTrack(signalCid string, ti *livekit.TrackInfo)
 
 		p.pendingTracksLock.Lock()
 		if pti := p.pendingTracks[signalCid]; pti != nil {
-			p.sendTrackPublished(signalCid, pti.trackInfos[0])
+			p.sendTrackPublished(signalCid, proto.CloneOf(pti.trackInfos[0]))
 			pti.queued = false
 		}
 		p.pendingTracksLock.Unlock()
