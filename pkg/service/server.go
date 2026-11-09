@@ -69,6 +69,13 @@ type LivekitServer struct {
 	closedChan         chan struct{}
 }
 
+// SetRTCJoinAuthorizer adds an embedding application's join policy. Set it
+// before Start; a nil check preserves LiveKit's standard token-only behavior.
+func (s *LivekitServer) SetRTCJoinAuthorizer(check func(context.Context, *auth.ClaimGrants, livekit.RoomID) error) {
+	s.rtcService.SetJoinAuthorizer(check)
+	s.roomManager.SetRTCJoinAuthorizer(check)
+}
+
 func NewLivekitServer(conf *config.Config,
 	roomService livekit.RoomService,
 	agentDispatchService *AgentDispatchService,

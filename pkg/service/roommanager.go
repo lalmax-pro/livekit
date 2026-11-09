@@ -71,7 +71,9 @@ type iceConfigCacheKey struct {
 // RoomManager manages rooms and its interaction with participants.
 // It's responsible for creating, deleting rooms, as well as running sessions for participants
 type RoomManager struct {
-	lock sync.RWMutex
+	lock       sync.RWMutex
+	joinAuthMu sync.RWMutex
+	joinAuth   func(context.Context, *auth.ClaimGrants, livekit.RoomID) error
 
 	config            *config.Config
 	rtcConfig         *rtc.WebRTCConfig
@@ -108,6 +110,24 @@ type RoomManager struct {
 	rpc.UnimplementedParticipantServer
 	rpc.UnimplementedRoomServer
 	rpc.UnimplementedRoomManagerServer
+}
+
+// SetRTCJoinAuthorizer installs the embedding application's room-generation
+// check. The HTTP check alone cannot cover a room replacement during routing.
+func (r *RoomManager) SetRTCJoinAuthorizer(check func(context.Context, *auth.ClaimGrants, livekit.RoomID) error) {
+	r.joinAuthMu.Lock()
+	r.joinAuth = check
+	r.joinAuthMu.Unlock()
+}
+
+func (r *RoomManager) authorizeRTCJoin(ctx context.Context, grants *auth.ClaimGrants, roomID livekit.RoomID) error {
+	r.joinAuthMu.RLock()
+	check := r.joinAuth
+	r.joinAuthMu.RUnlock()
+	if check == nil {
+		return nil
+	}
+	return check(ctx, grants, roomID)
 }
 
 func NewLocalRoomManager(
@@ -317,6 +337,9 @@ func (r *RoomManager) StartSession(
 	// only create the room, but don't start a participant session
 	if pi.Identity == "" {
 		return nil
+	}
+	if err := r.authorizeRTCJoin(ctx, pi.Grants, room.ID()); err != nil {
+		return rtc.ErrPermissionDenied
 	}
 
 	// should not error out, error is logged in iceServersForParticipant even if it fails

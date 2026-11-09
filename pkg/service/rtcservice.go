@@ -32,6 +32,7 @@ import (
 	"go.uber.org/atomic"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/logger"
 	"github.com/livekit/psrpc"
@@ -66,6 +67,26 @@ type RTCService struct {
 
 	mu          sync.Mutex
 	connections map[*websocket.Conn]struct{}
+	joinAuthMu  sync.RWMutex
+	joinAuth    func(context.Context, *auth.ClaimGrants, livekit.RoomID) error
+}
+
+// SetJoinAuthorizer installs an optional application-specific check after the
+// signed join grants are validated and before a connection enters a room.
+func (s *RTCService) SetJoinAuthorizer(check func(context.Context, *auth.ClaimGrants, livekit.RoomID) error) {
+	s.joinAuthMu.Lock()
+	s.joinAuth = check
+	s.joinAuthMu.Unlock()
+}
+
+func (s *RTCService) authorizeJoin(ctx context.Context, grants *auth.ClaimGrants) error {
+	s.joinAuthMu.RLock()
+	check := s.joinAuth
+	s.joinAuthMu.RUnlock()
+	if check == nil {
+		return nil
+	}
+	return check(ctx, grants, "")
 }
 
 func NewRTCService(
@@ -223,6 +244,9 @@ func (s *RTCService) validateInternal(
 	)
 	if err != nil {
 		return res.roomName, routing.ParticipantInit{}, code, err
+	}
+	if err := s.authorizeJoin(r.Context(), res.grants); err != nil {
+		return res.roomName, routing.ParticipantInit{}, http.StatusForbidden, rtc.ErrPermissionDenied
 	}
 
 	pi := routing.ParticipantInit{
